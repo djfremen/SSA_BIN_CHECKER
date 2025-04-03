@@ -2,7 +2,7 @@
 
 ## Goal
 
-The primary goal was to develop a Python application (`tech2_reader.py`) capable of communicating with a Tech2 device via RS232 to read the Security System Access (SSA) data block, extract relevant information like the VIN and security codes (referred to as "immos"), potentially calculate security keys, and compare it against a reference file (`SSA.bin`). This document summarizes the key findings from the development and testing process using data related to VIN ending in `2996`.
+This document summarizes the key findings from the development and testing process using data related to VIN ending in `2996`.
 
 ## 1. SSA Data Block Download (714 Bytes)
 
@@ -43,7 +43,7 @@ The primary goal was to develop a Python application (`tech2_reader.py`) capable
           0x00000034  FF                                                |.               |
         ```
 
-## 3. "Immos" Data (8 Bytes Following VIN)
+## 3. "SecCodes" Data (8 Bytes Following VIN)
 
 *   **Location:** These 8 bytes reside immediately after the 17-byte VIN and a 1-byte `0x00` separator, specifically at offsets `0x18` through `0x1F` in the processed 714-byte data (`SSA_downloaded.bin`).
 *   **Interpretation (User Provided):** These 8 bytes represent the security codes, split into:
@@ -69,9 +69,9 @@ The primary goal was to develop a Python application (`tech2_reader.py`) capable
         ```
 *   **Role in Security Access (User Flow):** According to the user-provided flow, these "immos" bytes are decoded/derived after the initial security request and are then written back (e.g., to the PCMCIA card) after a calculation step.
 
-## 4. TIS2000 Log Analysis (`new_log-4j.txt`) vs. "Immos" Data
+## 4. GlobalTIS Log Analysis (`new_log-4j.txt`) vs. "Immos" Data
 
-*   **TIS Security Codes:** The TIS2000 logs show *different*, long hexadecimal strings associated with `SCImmo`/`SCInfo` for the same VIN (`...2996`) compared to the 8-byte "immos" (`O6IFISUM`/`FFFFFFFF`) read by our script.
+*   **TIS Security Codes:** The GlobalTIS logs show *different*, long hexadecimal strings associated with `SCImmo`/`SCInfo` for the same VIN (`...2996`) compared to the 8-byte "immos" (`O6IFISUM`/`FFFFFFFF`) read by our script.
     *   *TIS Log Example:*
         ```
         Tuple0 vin: YS3FD79Y276102996
@@ -87,7 +87,7 @@ The primary goal was to develop a Python application (`tech2_reader.py`) capable
 *   **Relevance:** This algorithm is central to the security access challenge-response. The diagnostic tool must read a `seed` from the ECU (likely contained within the downloaded 714-byte block or requested via a specific command) and use this algorithm to compute the correct `key` to send back for authentication.
 *   **Role vs. "Immos":** This Seed->Key calculation is distinct from the simple reading of the 8-byte "immos" data following the VIN. Gaining access likely involves sending the *calculated key*, not the observed "immos" bytes.
 
-## 6. Low-Level RS232 Communication (`entire-log_hookxp.txt`)
+## 6. Low-Level RS232 Communication (`tis2web.txt`)
 
 *   **Download Mode Entry:** Confirmed sequence `TX: ef 56 80 3b` -> `TX: ef 56 80 3b` -> `RX: ef 56 01 ba` matches implementation.
 *   **Challenge-Response:** The log clearly shows a challenge-response sequence for security access:
@@ -113,5 +113,3 @@ The primary goal was to develop a Python application (`tech2_reader.py`) capable
     *   Simply writing back the 714-byte block or the 8-byte "immos" data is **incorrect** for security access.
     *   The user-described flow of writing the "immos" back to the PCMCIA card was **not observed** in the RS232 log for *this specific security access sequence*. It might occur in a different context or involve different commands.
     *   Implementing *any* write functionality requires identifying the **specific commands, sequence, and data payloads** for the desired operation (e.g., sending calculated key, writing VIN, writing specific config bytes), based on further analysis of low-level logs or `cardwriter.exe` reverse engineering.
-
-This concludes the refined findings. The application reads the SSA block post-access. True security interaction requires implementing the observed challenge-response protocol. 
